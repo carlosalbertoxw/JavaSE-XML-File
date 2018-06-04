@@ -1,4 +1,9 @@
-/nbproject/
-/build/
-build.xml
-manifest.mf
+#Archivos
+*.orig
+
+#Carpetas
+nbproject/private/
+build/
+nbbuild/
+dist/
+nbdist/
