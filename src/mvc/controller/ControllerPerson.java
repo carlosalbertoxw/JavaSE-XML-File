@@ -16,11 +16,13 @@ public class ControllerPerson implements ActionListener, MouseListener {
 	private FramePerson framePerson;
 	private Person person;
 	private List<Person> persons;
+        private DAOPerson daop;
 
 	public ControllerPerson() {
 		framePerson = new FramePerson();
 		person = new Person();
 		persons = new ArrayList<Person>();
+                daop = new DAOPerson();
 		framePerson.getBtnSave().addActionListener(this);
 		framePerson.getBtnSave().setActionCommand("SAVE");
 		framePerson.getBtnUpdate().addActionListener(this);
@@ -58,7 +60,7 @@ public class ControllerPerson implements ActionListener, MouseListener {
 	public void mouseClicked(MouseEvent e) {
 		int fila = framePerson.getTblList().getSelectedRow();
 		person.setId(Integer.parseInt(framePerson.getTblList().getValueAt(fila, 0).toString()));
-		person = DAOPerson.read(person);
+		person = daop.read(person);
 		framePerson.getTxtId().setText(String.valueOf(person.getId()));
 		framePerson.getTxtName().setText(person.getName());
 		framePerson.getTxtLastName().setText(person.getLastName());
@@ -68,7 +70,7 @@ public class ControllerPerson implements ActionListener, MouseListener {
 
 	private void save() {
 		int id = 0;
-		persons = DAOPerson.readAll();
+		persons = daop.readAll();
 		for (Person person : persons) {
 			if (person.getId() > id) {
 				id = person.getId();
@@ -79,7 +81,7 @@ public class ControllerPerson implements ActionListener, MouseListener {
 		person.setLastName(framePerson.getTxtLastName().getText());
 		person.setEmail(framePerson.getTxtEmail().getText());
 		person.setPhoneNumber(framePerson.getTxtPhoneNumber().getText());
-		DAOPerson.create(person);
+		daop.create(person);
 	}
 
 	private void update() {
@@ -89,19 +91,19 @@ public class ControllerPerson implements ActionListener, MouseListener {
 			person.setLastName(framePerson.getTxtLastName().getText());
 			person.setEmail(framePerson.getTxtEmail().getText());
 			person.setPhoneNumber(framePerson.getTxtPhoneNumber().getText());
-			DAOPerson.update(person);
+			daop.update(person);
 		}
 	}
 
 	private void delete() {
 		if (!framePerson.getTxtId().getText().isEmpty()) {
 			person.setId(Integer.parseInt(framePerson.getTxtId().getText()));
-			DAOPerson.delete(person);
+			daop.delete(person);
 		}
 	}
 
 	private void list() {
-		persons = DAOPerson.readAll();
+		persons = daop.readAll();
 		framePerson.getModel().setRowCount(0);
 		for (Person person : persons) {
 			Object[] objects = new Object[6];

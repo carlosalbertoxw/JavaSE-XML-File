@@ -45,7 +45,6 @@ public class FramePerson extends JFrame {
 		this.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 
 		container = new JPanel();
-		this.setContentPane(container);
 		container.setLayout(new GridBagLayout());
 		GridBagConstraints constraints = new GridBagConstraints();
 		constraints.insets = new Insets(5, 5, 5, 5);
@@ -135,6 +134,7 @@ public class FramePerson extends JFrame {
 		constraints.gridwidth = GridBagConstraints.REMAINDER;
 		container.add(scrollPane, constraints);
 
+                this.setContentPane(container);
 		this.setVisible(true);
 	}
 
