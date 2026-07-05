@@ -7,6 +7,8 @@ import java.awt.event.MouseListener;
 import java.util.ArrayList;
 import java.util.List;
 
+import javax.swing.SwingUtilities;
+
 import mvc.dao.DAOPerson;
 import mvc.model.Person;
 import mvc.view.FramePerson;
@@ -33,7 +35,21 @@ public class ControllerPerson implements ActionListener, MouseListener {
 		framePerson.getBtnList().setActionCommand("LIST");
 		framePerson.getTblList().addMouseListener(this);
 		framePerson.getTxtId().setEnabled(false);
+		seedSampleData();
 		list();
+	}
+
+	/** Inserta un registro de ejemplo la primera vez, si el almacenamiento está vacío. */
+	private void seedSampleData() {
+		if (daop.readAll().isEmpty()) {
+			Person sample = new Person();
+			sample.setId(1);
+			sample.setName("Juan");
+			sample.setLastName("Pérez");
+			sample.setEmail("juan.perez@example.com");
+			sample.setPhoneNumber("600123456");
+			daop.create(sample);
+		}
 	}
 
 	@Override
@@ -59,8 +75,15 @@ public class ControllerPerson implements ActionListener, MouseListener {
 	@Override
 	public void mouseClicked(MouseEvent e) {
 		int fila = framePerson.getTblList().getSelectedRow();
+		if (fila < 0) {
+			return;
+		}
 		person.setId(Integer.parseInt(framePerson.getTblList().getValueAt(fila, 0).toString()));
-		person = daop.read(person);
+		Person found = daop.read(person);
+		if (found == null) {
+			return;
+		}
+		person = found;
 		framePerson.getTxtId().setText(String.valueOf(person.getId()));
 		framePerson.getTxtName().setText(person.getName());
 		framePerson.getTxtLastName().setText(person.getLastName());
@@ -126,7 +149,7 @@ public class ControllerPerson implements ActionListener, MouseListener {
 	}
 
 	public static void main(String[] args) {
-		new ControllerPerson();
+		SwingUtilities.invokeLater(ControllerPerson::new);
 	}
 
 	@Override
