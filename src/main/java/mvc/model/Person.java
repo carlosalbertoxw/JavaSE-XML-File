@@ -1,51 +1,20 @@
 package mvc.model;
 
-public class Person {
+import java.util.Optional;
+import java.util.regex.Pattern;
 
-	private int id;
-	private String name;
-	private String lastName;
-	private String email;
-	private String phoneNumber;
+public record Person(int id, String name, String lastName, String email, String phoneNumber) {
 
-	public int getId() {
-		return id;
-	}
+    private static final Pattern EMAIL = Pattern.compile("[^@\\s]+@[^@\\s]+\\.[^@\\s]+");
 
-	public void setId(int id) {
-		this.id = id;
-	}
-
-	public String getName() {
-		return name;
-	}
-
-	public void setName(String name) {
-		this.name = name;
-	}
-
-	public String getLastName() {
-		return lastName;
-	}
-
-	public void setLastName(String lastName) {
-		this.lastName = lastName;
-	}
-
-	public String getEmail() {
-		return email;
-	}
-
-	public void setEmail(String email) {
-		this.email = email;
-	}
-
-	public String getPhoneNumber() {
-		return phoneNumber;
-	}
-
-	public void setPhoneNumber(String phoneNumber) {
-		this.phoneNumber = phoneNumber;
-	}
-
+    /** Devuelve el primer problema encontrado en los datos, o vacío si son válidos. */
+    public Optional<String> findValidationError() {
+        if (name == null || name.isBlank()) {
+            return Optional.of("El nombre es obligatorio.");
+        }
+        if (email != null && !email.isBlank() && !EMAIL.matcher(email).matches()) {
+            return Optional.of("El correo no tiene un formato válido.");
+        }
+        return Optional.empty();
+    }
 }

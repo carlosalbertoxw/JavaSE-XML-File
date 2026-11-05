@@ -1,7 +1,6 @@
 package mvc.view;
 
 import java.awt.Dimension;
-import java.awt.FlowLayout;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
@@ -13,173 +12,126 @@ import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
 import javax.swing.JTextField;
+import javax.swing.ListSelectionModel;
 import javax.swing.table.DefaultTableModel;
 
 public class FramePerson extends JFrame {
 
-	private static final long serialVersionUID = 1L;
-	private JPanel container;
-	private JLabel lblId;
-	private JTextField txtId;
-	private JLabel lblName;
-	private JTextField txtName;
-	private JLabel lblLastName;
-	private JTextField txtLastName;
-	private JLabel lblEmail;
-	private JTextField txtEmail;
-	private JLabel lblPhoneNumber;
-	private JTextField txtPhoneNumber;
-	private JPanel ButtonsPanel;
-	private JButton btnSave;
-	private JButton btnDelete;
-	private JButton btnUpdate;
-	private JButton btnList;
-	private JTable tblList;
-	private DefaultTableModel model;
-	private JScrollPane scrollPane;
+    private static final long serialVersionUID = 1L;
+    private static final String[] COLUMNS = { "Id", "Nombre", "Apellido", "Email", "Teléfono" };
 
-	public FramePerson() {
-		this.setSize(800, 500);
-		this.setTitle("Directorio");
-		this.setLocationRelativeTo(null);
-		this.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+    private final JTextField txtId = new JTextField(5);
+    private final JTextField txtName = new JTextField(20);
+    private final JTextField txtLastName = new JTextField(20);
+    private final JTextField txtEmail = new JTextField(20);
+    private final JTextField txtPhoneNumber = new JTextField(20);
+    private final JButton btnSave = new JButton("Guardar");
+    private final JButton btnUpdate = new JButton("Actualizar");
+    private final JButton btnDelete = new JButton("Borrar");
+    private final JButton btnList = new JButton("Listar");
+    private final DefaultTableModel model = new DefaultTableModel(COLUMNS, 0) {
+        private static final long serialVersionUID = 1L;
 
-		container = new JPanel();
-		container.setLayout(new GridBagLayout());
-		GridBagConstraints constraints = new GridBagConstraints();
-		constraints.insets = new Insets(5, 5, 5, 5);
-		constraints.anchor = GridBagConstraints.NORTHWEST;
+        @Override
+        public boolean isCellEditable(int row, int column) {
+            return false;
+        }
+    };
+    private final JTable tblList = new JTable(model);
 
-		lblId = new JLabel("ID");
-		constraints.gridx = 0;
-		constraints.gridy = 0;
-		container.add(lblId, constraints);
+    public FramePerson() {
+        setTitle("Directorio");
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        tblList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
 
-		txtId = new JTextField(5);
-		constraints.gridx = 1;
-		container.add(txtId, constraints);
+        JPanel container = new JPanel(new GridBagLayout());
+        addField(container, "ID", txtId, 0);
+        addField(container, "Nombre", txtName, 1);
+        addField(container, "Apellido", txtLastName, 2);
+        addField(container, "Email", txtEmail, 3);
+        addField(container, "Teléfono", txtPhoneNumber, 4);
 
-		lblName = new JLabel("Nombre");
-		constraints.gridx = 0;
-		constraints.gridy = 1;
-		container.add(lblName, constraints);
+        JPanel buttons = new JPanel();
+        buttons.add(btnSave);
+        buttons.add(btnUpdate);
+        buttons.add(btnDelete);
+        buttons.add(btnList);
+        GridBagConstraints buttonsConstraints = constraints(0, 5);
+        buttonsConstraints.gridwidth = GridBagConstraints.REMAINDER;
+        container.add(buttons, buttonsConstraints);
 
-		txtName = new JTextField(20);
-		constraints.gridx = 1;
-		container.add(txtName, constraints);
+        GridBagConstraints tableConstraints = constraints(0, 6);
+        tableConstraints.gridwidth = GridBagConstraints.REMAINDER;
+        tableConstraints.fill = GridBagConstraints.BOTH;
+        tableConstraints.weightx = 1;
+        tableConstraints.weighty = 1;
+        JScrollPane scrollPane = new JScrollPane(tblList);
+        scrollPane.setPreferredSize(new Dimension(750, 200));
+        container.add(scrollPane, tableConstraints);
 
-		lblLastName = new JLabel("Apellido");
-		constraints.gridx = 0;
-		constraints.gridy = 2;
-		container.add(lblLastName, constraints);
+        setContentPane(container);
+        // Si no cabe el tamaño preferido, GridBagLayout reduce los campos de texto casi a cero.
+        pack();
+        setMinimumSize(getSize());
+        setSize(800, 500);
+        setLocationRelativeTo(null);
+    }
 
-		txtLastName = new JTextField(20);
-		constraints.gridx = 1;
-		container.add(txtLastName, constraints);
+    private static void addField(JPanel container, String label, JTextField field, int row) {
+        container.add(new JLabel(label), constraints(0, row));
+        container.add(field, constraints(1, row));
+    }
 
-		lblEmail = new JLabel("Email");
-		constraints.gridx = 0;
-		constraints.gridy = 3;
-		container.add(lblEmail, constraints);
+    private static GridBagConstraints constraints(int column, int row) {
+        GridBagConstraints constraints = new GridBagConstraints();
+        constraints.gridx = column;
+        constraints.gridy = row;
+        constraints.insets = new Insets(5, 5, 5, 5);
+        constraints.anchor = GridBagConstraints.NORTHWEST;
+        return constraints;
+    }
 
-		txtEmail = new JTextField(20);
-		constraints.gridx = 1;
-		container.add(txtEmail, constraints);
+    public JTextField getTxtId() {
+        return txtId;
+    }
 
-		lblPhoneNumber = new JLabel("Teléfono");
-		constraints.gridx = 0;
-		constraints.gridy = 4;
-		container.add(lblPhoneNumber, constraints);
+    public JTextField getTxtName() {
+        return txtName;
+    }
 
-		txtPhoneNumber = new JTextField(20);
-		constraints.gridx = 1;
-		container.add(txtPhoneNumber, constraints);
+    public JTextField getTxtLastName() {
+        return txtLastName;
+    }
 
-		ButtonsPanel = new JPanel(new FlowLayout());
-		constraints.gridx = 0;
-		constraints.gridy = 5;
-		constraints.gridwidth = GridBagConstraints.REMAINDER;
-		container.add(ButtonsPanel, constraints);
+    public JTextField getTxtEmail() {
+        return txtEmail;
+    }
 
-		btnSave = new JButton("Guardar");
-		ButtonsPanel.add(btnSave);
+    public JTextField getTxtPhoneNumber() {
+        return txtPhoneNumber;
+    }
 
-		btnUpdate = new JButton("Actualizar");
-		ButtonsPanel.add(btnUpdate);
+    public JButton getBtnSave() {
+        return btnSave;
+    }
 
-		btnDelete = new JButton("Borrar");
-		ButtonsPanel.add(btnDelete);
+    public JButton getBtnUpdate() {
+        return btnUpdate;
+    }
 
-		btnList = new JButton("Listar");
-		ButtonsPanel.add(btnList);
+    public JButton getBtnDelete() {
+        return btnDelete;
+    }
 
-		tblList = new JTable();
-		tblList.setEditingColumn(0);
-		String[] columnsName = new String[] { "Id", "Nombre", "Apellido", "Email", "Teléfono" };
-		model = new DefaultTableModel(null, columnsName) {
-			private static final long serialVersionUID = 1L;
+    public JButton getBtnList() {
+        return btnList;
+    }
 
-			@Override
-			public boolean isCellEditable(int fila, int columna) {
-				return false;
-			}
-		};
-		model.setRowCount(0);
-		tblList.setModel(model);
+    public DefaultTableModel getModel() {
+        return model;
+    }
 
-		scrollPane = new JScrollPane(tblList);
-		scrollPane.setPreferredSize(new Dimension(750, 200));
-		constraints.gridx = 0;
-		constraints.gridy = 7;
-		constraints.gridwidth = GridBagConstraints.REMAINDER;
-		container.add(scrollPane, constraints);
-
-                this.setContentPane(container);
-		this.setVisible(true);
-	}
-
-	public JTextField getTxtId() {
-		return txtId;
-	}
-
-	public JTextField getTxtName() {
-		return txtName;
-	}
-
-	public JTextField getTxtLastName() {
-		return txtLastName;
-	}
-
-	public JTextField getTxtEmail() {
-		return txtEmail;
-	}
-
-	public JTextField getTxtPhoneNumber() {
-		return txtPhoneNumber;
-	}
-
-	public JButton getBtnSave() {
-		return btnSave;
-	}
-
-	public JButton getBtnUpdate() {
-		return btnUpdate;
-	}
-
-	public JButton getBtnDelete() {
-		return btnDelete;
-	}
-
-	public JButton getBtnList() {
-		return btnList;
-	}
-
-	public DefaultTableModel getModel() {
-		return model;
-	}
-
-	public JTable getTblList() {
-		return tblList;
-	}
-
+    public JTable getTblList() {
+        return tblList;
+    }
 }

@@ -1,16 +1,17 @@
 package mvc.dao;
 
-import java.io.File;
 import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.io.Writer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.util.ArrayList;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.List;
+import java.util.Optional;
 
 import org.jdom2.Document;
 import org.jdom2.Element;
+import org.jdom2.IllegalDataException;
 import org.jdom2.JDOMException;
 import org.jdom2.input.SAXBuilder;
 import org.jdom2.output.Format;
@@ -20,114 +21,116 @@ import mvc.model.Person;
 
 public class DAOPerson {
 
-    /** Nombre por defecto del archivo de datos, ubicado en el directorio de trabajo. */
-    private static final String DEFAULT_FILE_NAME = "persons.xml";
+    private static final Path DEFAULT_FILE = Path.of("persons.xml");
 
-    private final File xmlFile;
+    /** Rechazar DOCTYPE impide que un XML malicioso lea archivos mediante entidades externas (XXE). */
+    private static final String DISALLOW_DOCTYPE = "http://apache.org/xml/features/disallow-doctype-decl";
+
+    private final Path xmlFile;
 
     public DAOPerson() {
-        this(new File(DEFAULT_FILE_NAME));
+        this(DEFAULT_FILE);
     }
 
-    /** Constructor con archivo explícito (útil para pruebas). */
-    public DAOPerson(File xmlFile) {
+    public DAOPerson(Path xmlFile) {
         this.xmlFile = xmlFile;
     }
 
-    public void create(Person person) {
-        Element root = loadFile();
-        root.addContent(toElement(person));
-        saveChanges(root);
+    /** Guarda la persona con el siguiente ID disponible y la devuelve con ese ID. */
+    public Person create(Person person) {
+        Document document = load();
+        Element root = document.getRootElement();
+        int nextId = root.getChildren().stream().mapToInt(DAOPerson::idOf).max().orElse(0) + 1;
+        Person created = new Person(nextId, person.name(), person.lastName(), person.email(), person.phoneNumber());
+        root.addContent(toElement(created));
+        save(document);
+        return created;
     }
 
-    public Person read(Person person) {
-        Element root = loadFile();
-        for (Element element : root.getChildren()) {
-            if (matchesId(element, person.getId())) {
-                return fromElement(element);
-            }
-        }
-        return null;
-    }
-
-    public boolean delete(Person person) {
-        Element root = loadFile();
-        List<Element> elements = root.getChildren();
-        for (int i = 0; i < elements.size(); i++) {
-            if (matchesId(elements.get(i), person.getId())) {
-                elements.remove(i);
-                saveChanges(root);
-                return true;
-            }
-        }
-        return false;
-    }
-
-    public boolean update(Person person) {
-        Element root = loadFile();
-        List<Element> elements = root.getChildren();
-        for (int i = 0; i < elements.size(); i++) {
-            if (matchesId(elements.get(i), person.getId())) {
-                elements.set(i, toElement(person));
-                saveChanges(root);
-                return true;
-            }
-        }
-        return false;
+    public Optional<Person> findById(int id) {
+        return readAll().stream().filter(person -> person.id() == id).findFirst();
     }
 
     public List<Person> readAll() {
-        Element root = loadFile();
-        List<Person> persons = new ArrayList<>();
-        for (Element element : root.getChildren()) {
-            persons.add(fromElement(element));
-        }
-        return persons;
+        return load().getRootElement().getChildren().stream().map(DAOPerson::fromElement).toList();
     }
 
-    Element loadFile() {
-        if (!xmlFile.exists() || xmlFile.length() == 0) {
-            return new Element("persons");
+    public boolean update(Person person) {
+        Document document = load();
+        List<Element> elements = document.getRootElement().getChildren();
+        for (int i = 0; i < elements.size(); i++) {
+            if (idOf(elements.get(i)) == person.id()) {
+                elements.set(i, toElement(person));
+                save(document);
+                return true;
+            }
         }
+        return false;
+    }
+
+    public boolean delete(int id) {
+        Document document = load();
+        boolean removed = document.getRootElement().getChildren().removeIf(element -> idOf(element) == id);
+        if (removed) {
+            save(document);
+        }
+        return removed;
+    }
+
+    private Document load() {
         try {
-            Document document = new SAXBuilder().build(xmlFile);
-            return document.getRootElement();
+            if (Files.notExists(xmlFile) || Files.size(xmlFile) == 0) {
+                return new Document(new Element("persons"));
+            }
+            SAXBuilder builder = new SAXBuilder();
+            builder.setFeature(DISALLOW_DOCTYPE, true);
+            return builder.build(xmlFile.toFile());
         } catch (JDOMException | IOException e) {
-            throw new RuntimeException("No se pudo leer el archivo XML: " + xmlFile, e);
+            throw new IllegalStateException("No se pudo leer el archivo XML: " + xmlFile, e);
         }
     }
 
-    private void saveChanges(Element root) {
-        XMLOutputter xmlOutputter = new XMLOutputter(Format.getPrettyFormat());
-        try (Writer writer = Files.newBufferedWriter(xmlFile.toPath(), StandardCharsets.UTF_8)) {
-            xmlOutputter.output(root, writer);
+    /** Escribe en un archivo temporal y lo mueve al final, para no truncar los datos si la escritura falla. */
+    private void save(Document document) {
+        Path temp = xmlFile.resolveSibling(xmlFile.getFileName() + ".tmp");
+        try {
+            try (Writer writer = Files.newBufferedWriter(temp, StandardCharsets.UTF_8)) {
+                new XMLOutputter(Format.getPrettyFormat()).output(document, writer);
+            }
+            Files.move(temp, xmlFile, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
         } catch (IOException e) {
-            throw new UncheckedIOException("No se pudo guardar el archivo XML: " + xmlFile, e);
+            throw new IllegalStateException("No se pudo guardar el archivo XML: " + xmlFile, e);
         }
     }
 
-    private boolean matchesId(Element element, int id) {
-        return element.getChildText("id") != null
-                && element.getChildText("id").equals(String.valueOf(id));
+    private static int idOf(Element element) {
+        String id = element.getChildText("id");
+        try {
+            return Integer.parseInt(id);
+        } catch (NumberFormatException e) {
+            throw new IllegalStateException("El archivo XML contiene un ID no válido: " + id, e);
+        }
     }
 
-    private Element toElement(Person person) {
-        Element e = new Element("person");
-        e.addContent(new Element("id").setText(String.valueOf(person.getId())));
-        e.addContent(new Element("name").setText(person.getName()));
-        e.addContent(new Element("lastName").setText(person.getLastName()));
-        e.addContent(new Element("email").setText(person.getEmail()));
-        e.addContent(new Element("phoneNumber").setText(person.getPhoneNumber()));
-        return e;
+    private static Element toElement(Person person) {
+        try {
+            return new Element("person")
+                    .addContent(new Element("id").setText(String.valueOf(person.id())))
+                    .addContent(new Element("name").setText(person.name()))
+                    .addContent(new Element("lastName").setText(person.lastName()))
+                    .addContent(new Element("email").setText(person.email()))
+                    .addContent(new Element("phoneNumber").setText(person.phoneNumber()));
+        } catch (IllegalDataException e) {
+            throw new IllegalArgumentException("Los datos contienen caracteres que no se pueden guardar en XML.", e);
+        }
     }
 
-    private Person fromElement(Element element) {
-        Person person = new Person();
-        person.setId(Integer.parseInt(element.getChildText("id")));
-        person.setName(element.getChildText("name"));
-        person.setLastName(element.getChildText("lastName"));
-        person.setEmail(element.getChildText("email"));
-        person.setPhoneNumber(element.getChildText("phoneNumber"));
-        return person;
+    private static Person fromElement(Element element) {
+        return new Person(
+                idOf(element),
+                element.getChildText("name"),
+                element.getChildText("lastName"),
+                element.getChildText("email"),
+                element.getChildText("phoneNumber"));
     }
 }

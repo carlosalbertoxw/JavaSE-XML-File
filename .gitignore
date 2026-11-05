@@ -1,9 +1,9 @@
 # Maven
 target/
-dependency-reduced-pom.xml
 
 # Datos generados en tiempo de ejecución
 persons.xml
+persons.xml.tmp
 
 # Eclipse
 .classpath

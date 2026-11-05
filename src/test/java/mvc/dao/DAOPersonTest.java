@@ -2,12 +2,13 @@ package mvc.dao;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -20,21 +21,17 @@ class DAOPersonTest {
     @TempDir
     Path tempDir;
 
+    private Path xmlFile;
     private DAOPerson dao;
 
     @BeforeEach
     void setUp() {
-        dao = new DAOPerson(new File(tempDir.toFile(), "persons.xml"));
+        xmlFile = tempDir.resolve("persons.xml");
+        dao = new DAOPerson(xmlFile);
     }
 
-    private static Person person(int id, String name) {
-        Person p = new Person();
-        p.setId(id);
-        p.setName(name);
-        p.setLastName("Apellido" + id);
-        p.setEmail(name.toLowerCase() + "@example.com");
-        p.setPhoneNumber("60000000" + id);
-        return p;
+    private static Person person(String name) {
+        return new Person(0, name, "Apellido", name.toLowerCase() + "@example.com", "600000000");
     }
 
     @Test
@@ -43,85 +40,156 @@ class DAOPersonTest {
     }
 
     @Test
+    void readAll_isEmpty_whenFileIsEmpty() throws IOException {
+        Files.createFile(xmlFile);
+
+        assertTrue(dao.readAll().isEmpty());
+    }
+
+    @Test
+    void readAll_doesNotCreateFile() {
+        dao.readAll();
+
+        assertFalse(Files.exists(xmlFile));
+    }
+
+    @Test
     void create_persistsPerson() {
-        dao.create(person(1, "Ana"));
+        dao.create(person("Ana"));
 
-        var all = dao.readAll();
+        List<Person> all = new DAOPerson(xmlFile).readAll();
         assertEquals(1, all.size());
-        assertEquals("Ana", all.get(0).getName());
-        assertEquals("ana@example.com", all.get(0).getEmail());
+        assertEquals("Ana", all.get(0).name());
+        assertEquals("ana@example.com", all.get(0).email());
     }
 
     @Test
-    void create_appendsMultiplePeople() {
-        dao.create(person(1, "Ana"));
-        dao.create(person(2, "Beto"));
-
-        assertEquals(2, dao.readAll().size());
+    void create_assignsConsecutiveIds() {
+        assertEquals(1, dao.create(person("Ana")).id());
+        assertEquals(2, dao.create(person("Beto")).id());
     }
 
     @Test
-    void read_returnsMatchingPerson() {
-        dao.create(person(1, "Ana"));
-        dao.create(person(2, "Beto"));
+    void create_ignoresReceivedId_andDoesNotDuplicate() {
+        Person first = dao.create(person("Ana"));
 
-        Person query = new Person();
-        query.setId(2);
-        Person found = dao.read(query);
+        Person second = dao.create(first);
 
-        assertNotNull(found);
-        assertEquals("Beto", found.getName());
+        assertEquals(2, second.id());
     }
 
     @Test
-    void read_returnsNull_whenNotFound() {
-        dao.create(person(1, "Ana"));
+    void create_usesHighestIdPlusOne_afterDeleting() {
+        int first = dao.create(person("Ana")).id();
+        dao.create(person("Beto"));
+        dao.delete(first);
 
-        Person query = new Person();
-        query.setId(99);
-        assertNull(dao.read(query));
+        assertEquals(3, dao.create(person("Carla")).id());
     }
 
     @Test
-    void update_modifiesExistingPerson() {
-        dao.create(person(1, "Ana"));
+    void create_rejectsCharactersNotAllowedInXml_andKeepsData() {
+        dao.create(person("Ana"));
 
-        Person changed = person(1, "Ana María");
-        assertTrue(dao.update(changed));
+        assertThrows(IllegalArgumentException.class, () -> dao.create(person("a\u0001b")));
 
-        Person query = new Person();
-        query.setId(1);
-        assertEquals("Ana María", dao.read(query).getName());
-    }
-
-    @Test
-    void update_returnsFalse_whenPersonNotFound() {
-        assertFalse(dao.update(person(42, "Nadie")));
-    }
-
-    @Test
-    void delete_removesPerson() {
-        dao.create(person(1, "Ana"));
-        dao.create(person(2, "Beto"));
-
-        assertTrue(dao.delete(person(1, "Ana")));
-
-        var all = dao.readAll();
-        assertEquals(1, all.size());
-        assertEquals(2, all.get(0).getId());
-    }
-
-    @Test
-    void delete_returnsFalse_whenPersonNotFound() {
-        dao.create(person(1, "Ana"));
-
-        assertFalse(dao.delete(person(99, "Fantasma")));
         assertEquals(1, dao.readAll().size());
     }
 
     @Test
-    void loadFile_returnsEmptyRoot_whenFileMissing() {
-        assertEquals("persons", dao.loadFile().getName());
-        assertTrue(dao.loadFile().getChildren().isEmpty());
+    void save_keepsAccents_writesDeclaration_andLeavesNoTemporaryFile() throws IOException {
+        dao.create(new Person(0, "María", "Peña", "", ""));
+
+        assertEquals("María", dao.readAll().get(0).name());
+        assertEquals("Peña", dao.readAll().get(0).lastName());
+        assertEquals("<?xml version=\"1.0\" encoding=\"UTF-8\"?>", Files.readAllLines(xmlFile).get(0));
+        assertFalse(Files.exists(tempDir.resolve("persons.xml.tmp")));
+    }
+
+    @Test
+    void findById_returnsMatchingPerson() {
+        dao.create(person("Ana"));
+        int id = dao.create(person("Beto")).id();
+
+        assertEquals("Beto", dao.findById(id).orElseThrow().name());
+    }
+
+    @Test
+    void findById_isEmpty_whenNotFound() {
+        dao.create(person("Ana"));
+
+        assertTrue(dao.findById(99).isEmpty());
+    }
+
+    @Test
+    void update_modifiesExistingPerson() {
+        Person created = dao.create(person("Ana"));
+
+        assertTrue(dao.update(new Person(created.id(), "Ana María", "Ruiz", "", "")));
+
+        Person updated = dao.findById(created.id()).orElseThrow();
+        assertEquals("Ana María", updated.name());
+        assertEquals("Ruiz", updated.lastName());
+    }
+
+    @Test
+    void update_returnsFalse_whenPersonNotFound() {
+        assertFalse(dao.update(new Person(42, "Nadie", "", "", "")));
+    }
+
+    @Test
+    void delete_removesPerson() {
+        int first = dao.create(person("Ana")).id();
+        int second = dao.create(person("Beto")).id();
+
+        assertTrue(dao.delete(first));
+
+        List<Person> all = dao.readAll();
+        assertEquals(1, all.size());
+        assertEquals(second, all.get(0).id());
+    }
+
+    @Test
+    void delete_returnsFalse_whenPersonNotFound() {
+        dao.create(person("Ana"));
+
+        assertFalse(dao.delete(99));
+        assertEquals(1, dao.readAll().size());
+    }
+
+    @Test
+    void readAll_fails_whenFileIsCorrupt_andKeepsIt() throws IOException {
+        String corrupt = "<persons><person>";
+        Files.writeString(xmlFile, corrupt);
+
+        assertThrows(IllegalStateException.class, () -> dao.readAll());
+
+        assertEquals(corrupt, Files.readString(xmlFile));
+    }
+
+    @Test
+    void readAll_fails_whenIdIsInvalid() throws IOException {
+        Files.writeString(xmlFile, "<persons><person><id>abc</id></person></persons>");
+
+        assertThrows(IllegalStateException.class, () -> dao.readAll());
+    }
+
+    @Test
+    void readAll_fails_whenIdIsMissing() throws IOException {
+        Files.writeString(xmlFile, "<persons><person><name>Ana</name></person></persons>");
+
+        assertThrows(IllegalStateException.class, () -> dao.readAll());
+    }
+
+    @Test
+    void readAll_rejectsExternalEntities() throws IOException {
+        Path secret = tempDir.resolve("secret.txt");
+        Files.writeString(secret, "contenido privado");
+        Files.writeString(xmlFile, """
+                <!DOCTYPE persons [<!ENTITY x SYSTEM "%s">]>
+                <persons><person><id>1</id><name>&x;</name></person></persons>
+                """.formatted(secret.toUri()));
+
+        assertThrows(IllegalStateException.class, () -> dao.readAll());
     }
 }

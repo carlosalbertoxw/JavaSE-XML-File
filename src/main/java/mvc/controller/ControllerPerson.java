@@ -1,171 +1,153 @@
 package mvc.controller;
 
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
-import java.awt.event.MouseEvent;
-import java.awt.event.MouseListener;
-import java.util.ArrayList;
 import java.util.List;
 
+import javax.swing.JOptionPane;
+import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
 
 import mvc.dao.DAOPerson;
 import mvc.model.Person;
 import mvc.view.FramePerson;
 
-public class ControllerPerson implements ActionListener, MouseListener {
+public class ControllerPerson {
 
-	private FramePerson framePerson;
-	private Person person;
-	private List<Person> persons;
-        private DAOPerson daop;
+    private final FramePerson view;
+    private final DAOPerson dao;
 
-	public ControllerPerson() {
-		framePerson = new FramePerson();
-		person = new Person();
-		persons = new ArrayList<Person>();
-                daop = new DAOPerson();
-		framePerson.getBtnSave().addActionListener(this);
-		framePerson.getBtnSave().setActionCommand("SAVE");
-		framePerson.getBtnUpdate().addActionListener(this);
-		framePerson.getBtnUpdate().setActionCommand("UPDATE");
-		framePerson.getBtnDelete().addActionListener(this);
-		framePerson.getBtnDelete().setActionCommand("DELETE");
-		framePerson.getBtnList().addActionListener(this);
-		framePerson.getBtnList().setActionCommand("LIST");
-		framePerson.getTblList().addMouseListener(this);
-		framePerson.getTxtId().setEnabled(false);
-		seedSampleData();
-		list();
-	}
+    public ControllerPerson(FramePerson view, DAOPerson dao) {
+        this.view = view;
+        this.dao = dao;
+        view.getTxtId().setEnabled(false);
+        view.getBtnSave().addActionListener(e -> runSafely(this::save));
+        view.getBtnUpdate().addActionListener(e -> runSafely(this::update));
+        view.getBtnDelete().addActionListener(e -> runSafely(this::delete));
+        view.getBtnList().addActionListener(e -> runSafely(this::refresh));
+        view.getTblList().getSelectionModel().addListSelectionListener(e -> {
+            if (!e.getValueIsAdjusting()) {
+                runSafely(this::showSelectedPerson);
+            }
+        });
+    }
 
-	/** Inserta un registro de ejemplo la primera vez, si el almacenamiento está vacío. */
-	private void seedSampleData() {
-		if (daop.readAll().isEmpty()) {
-			Person sample = new Person();
-			sample.setId(1);
-			sample.setName("Juan");
-			sample.setLastName("Pérez");
-			sample.setEmail("juan.perez@example.com");
-			sample.setPhoneNumber("600123456");
-			daop.create(sample);
-		}
-	}
+    private void save() {
+        Person person = readForm(0);
+        if (isValid(person)) {
+            dao.create(person);
+            refresh();
+        }
+    }
 
-	@Override
-	public void actionPerformed(ActionEvent e) {
-		if (e.getActionCommand().equals("SAVE")) {
-			save();
-			list();
-			cleanFields();
-		} else if (e.getActionCommand().equals("UPDATE")) {
-			update();
-			list();
-			cleanFields();
-		} else if (e.getActionCommand().equals("DELETE")) {
-			delete();
-			list();
-			cleanFields();
-		} else if (e.getActionCommand().equals("LIST")) {
-			list();
-			cleanFields();
-		}
-	}
+    private void update() {
+        if (!hasPersonSelected()) {
+            return;
+        }
+        Person person = readForm(selectedId());
+        if (isValid(person)) {
+            if (!dao.update(person)) {
+                showError("La persona ya no existe.");
+            }
+            refresh();
+        }
+    }
 
-	@Override
-	public void mouseClicked(MouseEvent e) {
-		int fila = framePerson.getTblList().getSelectedRow();
-		if (fila < 0) {
-			return;
-		}
-		person.setId(Integer.parseInt(framePerson.getTblList().getValueAt(fila, 0).toString()));
-		Person found = daop.read(person);
-		if (found == null) {
-			return;
-		}
-		person = found;
-		framePerson.getTxtId().setText(String.valueOf(person.getId()));
-		framePerson.getTxtName().setText(person.getName());
-		framePerson.getTxtLastName().setText(person.getLastName());
-		framePerson.getTxtEmail().setText(person.getEmail());
-		framePerson.getTxtPhoneNumber().setText(person.getPhoneNumber());
-	}
+    private void delete() {
+        if (!hasPersonSelected()) {
+            return;
+        }
+        if (!dao.delete(selectedId())) {
+            showError("La persona ya no existe.");
+        }
+        refresh();
+    }
 
-	private void save() {
-		int id = 0;
-		persons = daop.readAll();
-		for (Person person : persons) {
-			if (person.getId() > id) {
-				id = person.getId();
-			}
-		}
-		person.setId(id + 1);
-		person.setName(framePerson.getTxtName().getText());
-		person.setLastName(framePerson.getTxtLastName().getText());
-		person.setEmail(framePerson.getTxtEmail().getText());
-		person.setPhoneNumber(framePerson.getTxtPhoneNumber().getText());
-		daop.create(person);
-	}
+    private void refresh() {
+        List<Person> persons = dao.readAll();
+        view.getModel().setRowCount(0);
+        for (Person person : persons) {
+            view.getModel().addRow(new Object[] {
+                    person.id(), person.name(), person.lastName(), person.email(), person.phoneNumber() });
+        }
+        clearForm();
+    }
 
-	private void update() {
-		if (!framePerson.getTxtId().getText().isEmpty()) {
-			person.setId(Integer.parseInt(framePerson.getTxtId().getText()));
-			person.setName(framePerson.getTxtName().getText());
-			person.setLastName(framePerson.getTxtLastName().getText());
-			person.setEmail(framePerson.getTxtEmail().getText());
-			person.setPhoneNumber(framePerson.getTxtPhoneNumber().getText());
-			daop.update(person);
-		}
-	}
+    private void showSelectedPerson() {
+        int row = view.getTblList().getSelectedRow();
+        if (row >= 0) {
+            dao.findById((int) view.getModel().getValueAt(row, 0)).ifPresent(this::fillForm);
+        }
+    }
 
-	private void delete() {
-		if (!framePerson.getTxtId().getText().isEmpty()) {
-			person.setId(Integer.parseInt(framePerson.getTxtId().getText()));
-			daop.delete(person);
-		}
-	}
+    private boolean hasPersonSelected() {
+        if (view.getTxtId().getText().isEmpty()) {
+            showError("Selecciona una persona de la lista.");
+            return false;
+        }
+        return true;
+    }
 
-	private void list() {
-		persons = daop.readAll();
-		framePerson.getModel().setRowCount(0);
-		for (Person person : persons) {
-			Object[] objects = new Object[6];
-			objects[0] = person.getId();
-			objects[1] = person.getName();
-			objects[2] = person.getLastName();
-			objects[3] = person.getEmail();
-			objects[4] = person.getPhoneNumber();
-			framePerson.getModel().addRow(objects);
-		}
-		framePerson.getTblList().setModel(framePerson.getModel());
-	}
+    private int selectedId() {
+        return Integer.parseInt(view.getTxtId().getText());
+    }
 
-	private void cleanFields() {
-		framePerson.getTxtId().setText("");
-		framePerson.getTxtName().setText("");
-		framePerson.getTxtLastName().setText("");
-		framePerson.getTxtEmail().setText("");
-		framePerson.getTxtPhoneNumber().setText("");
-	}
+    private boolean isValid(Person person) {
+        person.findValidationError().ifPresent(this::showError);
+        return person.findValidationError().isEmpty();
+    }
 
-	public static void main(String[] args) {
-		SwingUtilities.invokeLater(ControllerPerson::new);
-	}
+    private Person readForm(int id) {
+        return new Person(
+                id,
+                textOf(view.getTxtName()),
+                textOf(view.getTxtLastName()),
+                textOf(view.getTxtEmail()),
+                textOf(view.getTxtPhoneNumber()));
+    }
 
-	@Override
-	public void mousePressed(MouseEvent e) {
-	}
+    private static String textOf(JTextField field) {
+        return field.getText().strip();
+    }
 
-	@Override
-	public void mouseReleased(MouseEvent e) {
-	}
+    private void fillForm(Person person) {
+        view.getTxtId().setText(String.valueOf(person.id()));
+        view.getTxtName().setText(person.name());
+        view.getTxtLastName().setText(person.lastName());
+        view.getTxtEmail().setText(person.email());
+        view.getTxtPhoneNumber().setText(person.phoneNumber());
+    }
 
-	@Override
-	public void mouseEntered(MouseEvent e) {
-	}
+    private void clearForm() {
+        view.getTxtId().setText("");
+        view.getTxtName().setText("");
+        view.getTxtLastName().setText("");
+        view.getTxtEmail().setText("");
+        view.getTxtPhoneNumber().setText("");
+    }
 
-	@Override
-	public void mouseExited(MouseEvent e) {
-	}
+    /** Muestra los errores al usuario, porque la consola no existe al abrir el JAR con doble clic. */
+    private void runSafely(Runnable action) {
+        try {
+            action.run();
+        } catch (RuntimeException e) {
+            showError(e.getMessage());
+        }
+    }
 
+    private void showError(String message) {
+        JOptionPane.showMessageDialog(view, message, "Directorio", JOptionPane.ERROR_MESSAGE);
+    }
+
+    public static void main(String[] args) {
+        SwingUtilities.invokeLater(() -> {
+            FramePerson view = new FramePerson();
+            ControllerPerson controller = new ControllerPerson(view, new DAOPerson());
+            try {
+                controller.refresh();
+                view.setVisible(true);
+            } catch (RuntimeException e) {
+                controller.showError(e.getMessage());
+                System.exit(1);
+            }
+        });
+    }
 }
